@@ -1,169 +1,98 @@
-# [NeurIPS 2024] CountGD: Multi-Modal Open-World Counting
+# Dense Scaffolding Counting & Classification via CountGD
 
-Niki Amini-Naieni, Tengda Han, & Andrew Zisserman
+## 1. Introduction & Objective
 
-Official PyTorch implementation for CountGD. Details can be found in the paper, [[Paper]](https://arxiv.org/abs/2407.04619) [[Project page]](https://www.robots.ox.ac.uk/~vgg/research/countgd/).
+**Objective:** Accurately detect, classify, and count 3 types of construction scaffolding: `IQC1524`, `L2`, and `IQC1219` in real-world construction site images.
 
-If you find this repository useful, please give it a star ⭐.
+This project utilizes CountGD, a multi-modal Foundation Model based on GroundingDINO, adapted specifically for the complex and high-density environment of construction sites.
 
-## Try Using CountGD to Count with Text, Visual Exemplars, or Both Together Through the App [[HERE]](https://huggingface.co/spaces/nikigoli/countgd).
+## 2. Problem Statement & Breakthrough Solution
 
-## Try Out the Colab Notebook to Count Objects in All the Images in a Zip Folder With Text [[HERE]](https://huggingface.co/spaces/nikigoli/countgd/blob/main/notebooks/demo.ipynb).
+### The Challenge
+Initially, YOLO11 (Large and Medium versions) was used to tackle this problem. However, the construction site environment proved to be extremely complex with heavily intertwined scaffolding. This caused YOLO's Non-Maximum Suppression (NMS) mechanism to unintentionally suppress valid bounding boxes, leading to severe undercounting in high-density areas.
 
-<img src=img/teaser.jpg width="100%"/>
+### The Solution
+We transitioned to **CountGD** to overcome YOLO's limitations. CountGD provides several key advantages for this specific use case:
+- **Multi-Modal Foundation:** Combines Text Prompts with Visual Exemplars (providing sample reference boxes for the model to "look at" and count).
+- **Adaptive Cropping:** Supports advanced techniques for counting in ultra-dense images by automatically dividing the image into patches, preventing OOM errors and maintaining high recall for intertwined objects.
 
-## CountGD Architecture
+## 3. System Architecture & Environment
 
-<img src=img/architecture.jpg width="100%"/>
+### Platform & Hardware
+- **Platform:** Kaggle Notebook
+- **Hardware:** Dual GPU NVIDIA Tesla T4 (2 x 15GB VRAM)
 
-## Contents
-* [Preparation](#preparation)
-* [CountGD Inference & Pre-Trained Weights](#countgd-inference--pre-trained-weights)
-* [Testing Your Own Dataset](#testing-your-own-dataset)
-* [CountGD Train](#countgd-train)
-* [CountBench](#countbench)
-* [CARPK](#carpk)
-* [Citation](#citation)
-* [Acknowledgements](#acknowledgements)
+### Technical Stack
+- **Model:** CountGD (Swin-T backbone)
+- **Framework:** PyTorch, CUDA
+- **Data Format:** ODVG (`.jsonl`)
 
-## Preparation
-### 1. Download Dataset
+---
 
-In our project, the FSC-147 dataset is used.
-Please visit following link to download this dataset.
+## 4. Usage Instructions
 
-* [FSC-147](https://github.com/cvlab-stonybrook/LearningToCountEverything)
+### Step 1: Installation and Compilation
 
-### 2. Install GCC
+1. **Clone the repository and install dependencies:**
+   ```bash
+   git clone <repository-url>
+   cd CountGD
+   pip install -r requirements.txt
+   ```
 
-Install GCC. In this project, GCC 11.3 and 11.4 were tested. The following command installs GCC and other development libraries and tools required for compiling software in Ubuntu.
+2. **Compile the C++/CUDA core:**
+   Navigate to the operations directory and compile the Multi-Scale Deformable Attention algorithm:
+   ```bash
+   cd models/GroundingDINO/ops/
+   python setup.py build install
+   cd ../../../
+   ```
 
+3. **Download Pre-trained Weights:**
+   Download the Swin-T version of the pre-trained weights (`groundingdino_swint_ogc.pth`) and place it in the project root.
+
+### Step 2: Data Preparation
+
+CountGD requires the ODVG (`.jsonl`) format instead of the standard YOLO format. 
+
+Use the provided custom script to convert your YOLO annotations (`.txt`) into the required ODVG format:
+```bash
+python tools/yolo2odvg.py
 ```
-sudo apt update
-sudo apt install build-essential
-```
+*Note: This script recalculates absolute bounding box coordinates, assigns required text captions (e.g., `"IQC1524 scaffold ."`), and randomly extracts 2-3 scaffolding bounding boxes per image to serve as "Visual Exemplars" for the model.*
 
-### 3. Clone Repository
+### Step 3: Configuration Tuning
 
-```
-git clone git@github.com:niki-amini-naieni/CountGD.git
-```
+1. **Dataset Mapping:**
+   Ensure the data mapping file `config/datasets_scaffold.json` correctly points to your training and validation `.jsonl` files.
 
-### 4. Set Up Anaconda Environment:
+2. **Training Configuration (`config/cfg_scaffold_swint.py`):**
+   The configuration is tailored for Dual T4 GPUs:
+   - **Backbone:** `swin_T_224_1k` (Lightweight version)
+   - **Batch Size:** `2` (Lowered to prevent Out Of Memory errors)
+   - **Epochs:** `30`
+   - **Learning Rate:** `1e-4`
+   - **Freezing:** `freeze_keywords = ['backbone.0', 'bert']` (Freezes the visual encoder and text encoder to only train the Counting head).
 
-The following commands will create a suitable Anaconda environment for running the CountGD training and inference procedures. To produce the results in the paper, we used [Anaconda version 2024.02-1](https://repo.anaconda.com/archive/Anaconda3-2024.02-1-Linux-x86_64.sh).
+### Step 4: Training
 
-```
-conda create -n countgd python=3.9.19
-conda activate countgd
-cd CountGD
-pip install -r requirements.txt
-export CC=/usr/bin/gcc-11 # this ensures that gcc 11 is being used for compilation
-cd models/GroundingDINO/ops
-python setup.py build install
-python test.py # should result in 6 lines of * True
-pip install git+https://github.com/facebookresearch/segment-anything.git
-cd ../../../
-```
+Utilize Distributed Data Parallel (DDP) to leverage the power of dual GPUs. Run the following command as a background job:
 
-### 5. Download Pre-Trained Weights
-
-* Make the ```checkpoints``` directory inside the ```CountGD``` repository.
-
-  ```
-  mkdir checkpoints
-  ```
-
-* Execute the following command.
-
-  ```
-  python download_bert.py
-  ```
-
-* Download the pretrained Swin-B GroundingDINO weights.
-
-  ```
-  wget -P checkpoints https://github.com/IDEA-Research/GroundingDINO/releases/download/v0.1.0-alpha2/groundingdino_swinb_cogcoor.pth
-  ```
-
-* Download the pretrained ViT-H Segment Anything Model (SAM) weights.
-
-  ```
-  wget -P checkpoints https://dl.fbaipublicfiles.com/segment_anything/sam_vit_h_4b8939.pth
-  ```
-
-## CountGD Inference & Pre-Trained Weights
-
-The model weights used in the paper can be downloaded from [Google Drive link (1.2 GB)](https://drive.google.com/file/d/1RbRcNLsOfeEbx6u39pBehqsgQiexHHrI/view?usp=sharing). To reproduce the results in the paper, run the following commands after activating the Anaconda environment set up in step 4 of [Preparation](#preparation). Make sure to change the directory and file names in [datasets_fsc147_val.json](https://github.com/niki-amini-naieni/CountGD/blob/main/config/datasets_fsc147_val.json) and [datasets_fsc147_test.json](https://github.com/niki-amini-naieni/CountGD/blob/main/config/datasets_fsc147_test.json) to the ones you set up in step 1 of [Preparation](#preparation). Make sure that the model file name refers to the model that you downloaded.
-
-For the validation set (takes ~ 26 minutes on 1 RTX 3090 GPU):
-
-```
-python -u main_inference.py --output_dir ./countgd_val -c config/cfg_fsc147_val.py --eval --datasets config/datasets_fsc147_val.json --pretrain_model_path checkpoints/checkpoint_fsc147_best.pth --options text_encoder_type=checkpoints/bert-base-uncased --crop --sam_tt_norm --remove_bad_exemplar
+```bash
+python -m torch.distributed.launch --nproc_per_node=2 --use_env main.py \
+  --config_file config/cfg_scaffold_swint.py \
+  --datasets config/datasets_scaffold.json
 ```
 
-For the validation set with no Segment Anything Model (SAM) test-time normalization and, hence, slightly reduced counting accuracy (takes ~ 6 minutes on 1 RTX 3090 GPU):
+### Step 5: Inference
 
+Test the model on real-world images using the best saved checkpoint (`checkpoint_best_regular.pth`). 
+
+Input the text prompt and exemplar bounding boxes. Ensure the **Adaptive Cropping** feature is enabled so the model automatically crops high-density images into smaller patches, counts the objects, and aggregates the final results (crucial for images with 900+ scaffolding instances).
+
+```bash
+python single_image_inference.py \
+  --config_file config/cfg_scaffold_swint.py \
+  --checkpoint_path checkpoint_best_regular.pth \
+  # ... Add other required inference arguments as needed
 ```
-python -u main_inference.py --output_dir ./countgd_val -c config/cfg_fsc147_val.py --eval --datasets config/datasets_fsc147_val.json --pretrain_model_path checkpoints/checkpoint_fsc147_best.pth --options text_encoder_type=checkpoints/bert-base-uncased --crop --remove_bad_exemplar
-```
-
-For the test set (takes ~ 26 minutes on 1 RTX 3090 GPU):
-
-```
-python -u main_inference.py --output_dir ./countgd_test -c config/cfg_fsc147_test.py --eval --datasets config/datasets_fsc147_test.json --pretrain_model_path checkpoints/checkpoint_fsc147_best.pth --options text_encoder_type=checkpoints/bert-base-uncased --crop --sam_tt_norm --remove_bad_exemplar
-```
-
-For the test set with no Segment Anything Model (SAM) test-time normalization and, hence, slightly reduced counting accuracy (takes ~ 6 minutes on 1 RTX 3090 GPU):
-
-```
-python -u main_inference.py --output_dir ./countgd_test -c config/cfg_fsc147_test.py --eval --datasets config/datasets_fsc147_test.json --pretrain_model_path checkpoints/checkpoint_fsc147_best.pth --options text_encoder_type=checkpoints/bert-base-uncased --crop --remove_bad_exemplar
-```
-
-* Note: Inference can be further sped up by increasing the batch size for evaluation
-
-## Testing Your Own Dataset
-
-You can run CountGD on all the images in a zip folder uploaded to Google Drive using the Colab notebook [here](https://github.com/niki-amini-naieni/CountGD/blob/main/google-drive-batch-process-countgd.ipynb) in the repository or [here](https://huggingface.co/spaces/nikigoli/countgd/blob/main/notebooks/demo.ipynb) online. This code supports a single text description for the whole dataset but can be easily modified to handle different text descriptions for different images and to support exemplar inputs.
-
-## CountGD Train
-
-See [here](https://github.com/niki-amini-naieni/CountGD/blob/main/training.md) for the code and [here](https://github.com/niki-amini-naieni/CountGD/issues/32) about a relevant issue
-
-## CountBench
-
-See [here](https://github.com/niki-amini-naieni/CountGD/issues/6)
-
-## CARPK
-
-To test CountGD on the CARPK test set,
-
-First install packages for obtaining the CARPK dataset:
-
-```
-pip install hub
-pip install "deeplake<4"
-```
-
-Then run:
-
-```
-python test_carpk.py --pretrain_model_path checkpoints/checkpoint_fsc147_best.pth --config config/cfg_fsc147_vit_b_test.py --confidence_thresh 0.23 --test --use_exemplars
-```
-
-## Citation
-If you use our research in your project, please cite our paper.
-
-```
-@InProceedings{AminiNaieni24,
-  author = "Amini-Naieni, N. and Han, T. and Zisserman, A.",
-  title = "CountGD: Multi-Modal Open-World Counting",
-  booktitle = "Advances in Neural Information Processing Systems (NeurIPS)",
-  year = "2024",
-}
-```
-
-### Acknowledgements
-
-This repository is based on the [Open-GroundingDino](https://github.com/longzw1997/Open-GroundingDino/tree/main) and uses code from the [GroundingDINO repository](https://github.com/IDEA-Research/GroundingDINO). If you have any questions about our code implementation, please contact us at [niki.amini-naieni@eng.ox.ac.uk](mailto:niki.amini-naieni@eng.ox.ac.uk).
-

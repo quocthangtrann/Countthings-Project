@@ -1,0 +1,16 @@
+{
+    "train": [
+        {
+            "name": "scaffold_train",
+            "anno": "/kaggle/working/train_scaffold.jsonl",
+            "label_map": null
+        }
+    ],
+    "val": [
+        {
+            "name": "scaffold_val",
+            "anno": "/kaggle/working/valid_scaffold.jsonl",
+            "label_map": null
+        }
+    ]
+}
