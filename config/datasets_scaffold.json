@@ -3,6 +3,7 @@
         {
             "name": "scaffold_train",
             "dataset_mode": "odvg",
+            "root": "/kaggle/working/mega_dataset/train/images",
             "anno": "/kaggle/working/train_scaffold.jsonl",
             "label_map": null
         }
@@ -11,6 +12,7 @@
         {
             "name": "scaffold_val",
             "dataset_mode": "odvg",
+            "root": "/kaggle/working/mega_dataset/valid/images",
             "anno": "/kaggle/working/valid_scaffold.jsonl",
             "label_map": null
         }

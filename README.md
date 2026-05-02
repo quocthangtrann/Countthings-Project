@@ -376,7 +376,13 @@ import os, json, random
 from PIL import Image
 
 def convert_yolo_to_odvg(img_dir, lbl_dir, output_file):
-    """Convert YOLO .txt labels to CountGD ODVG .jsonl format."""
+    """Convert YOLO .txt labels to CountGD ODVG .jsonl format.
+    
+    Produces the exact format expected by ODVGDataset (VG mode):
+      - "filename": relative image name (joined with root in config)
+      - "grounding": {"regions": [{"bbox": [x1,y1,x2,y2], "phrase": "..."}]}
+      - "exemplars": [[x1,y1,x2,y2], ...]
+    """
     class_map = {
         0: "IQC1524 scaffold",
         1: "L2 scaffold",
@@ -398,7 +404,9 @@ def convert_yolo_to_odvg(img_dir, lbl_dir, output_file):
         with Image.open(img_path) as img:
             img_w, img_h = img.size
 
-        class_boxes = {}
+        # Collect all boxes grouped by class
+        regions = []
+        all_boxes = []
         with open(lbl_path, 'r') as f:
             for line in f:
                 parts = line.strip().split()
@@ -413,23 +421,24 @@ def convert_yolo_to_odvg(img_dir, lbl_dir, output_file):
                 x2 = (cx + nw / 2) * img_w
                 y2 = (cy + nh / 2) * img_h
 
-                cls_name = class_map[cls_id]
-                if cls_name not in class_boxes:
-                    class_boxes[cls_name] = []
-                class_boxes[cls_name].append([x1, y1, x2, y2])
+                bbox = [round(x1, 2), round(y1, 2), round(x2, 2), round(y2, 2)]
+                phrase = class_map[cls_id]
+                regions.append({"bbox": bbox, "phrase": phrase})
+                all_boxes.append(bbox)
 
-        # Create one record per class, with random exemplar boxes
-        for cls_name, boxes in class_boxes.items():
-            num_exemplars = min(3, len(boxes))
-            exemplars = random.sample(boxes, num_exemplars)
+        if not regions:
+            continue
 
-            record = {
-                "file_name": img_path,
-                "caption": f"{cls_name} .",       # Required syntax for CountGD
-                "grounding_dict": {cls_name: boxes},
-                "exemplars": exemplars
-            }
-            jsonl_data.append(record)
+        # Select 2-3 random exemplar boxes
+        num_exemplars = min(3, len(all_boxes))
+        exemplars = random.sample(all_boxes, num_exemplars)
+
+        record = {
+            "filename": img_name,           # Relative path (root is in config)
+            "grounding": {"regions": regions},
+            "exemplars": exemplars
+        }
+        jsonl_data.append(record)
 
     with open(output_file, 'w') as f:
         for record in jsonl_data:
@@ -554,6 +563,8 @@ Maps dataset names to the ODVG annotation files generated in Cell 3:
     "train": [
         {
             "name": "scaffold_train",
+            "dataset_mode": "odvg",
+            "root": "/kaggle/working/mega_dataset/train/images",
             "anno": "/kaggle/working/train_scaffold.jsonl",
             "label_map": null
         }
@@ -561,6 +572,8 @@ Maps dataset names to the ODVG annotation files generated in Cell 3:
     "val": [
         {
             "name": "scaffold_val",
+            "dataset_mode": "odvg",
+            "root": "/kaggle/working/mega_dataset/valid/images",
             "anno": "/kaggle/working/valid_scaffold.jsonl",
             "label_map": null
         }
