@@ -104,8 +104,9 @@ class GroundingDINO(nn.Module):
         assert query_dim == 4
 
         # visual exemplar cropping
+        feature_map_in_channels = sum(backbone.num_channels)
         self.feature_map_proj = nn.Conv2d(
-            (256 + 512 + 1024), hidden_dim, kernel_size=1
+            feature_map_in_channels, hidden_dim, kernel_size=1
         )
         self.feature_map_encoder = TransformerEncoder(
             3, hidden_dim, 8, 0.1, 1e-5,
