@@ -251,7 +251,7 @@ import subprocess, os
 
 # 1a. Clone CountGD repository
 if not os.path.exists('/kaggle/working/CountGD'):
-    subprocess.run(['git', 'clone', 'https://github.com/<your-username>/CountGD.git',
+    subprocess.run(['git', 'clone', 'https://github.com/quocthangtrann/Countthings-Project.git',
                     '/kaggle/working/CountGD'], check=True)
 
 os.chdir('/kaggle/working/CountGD')
