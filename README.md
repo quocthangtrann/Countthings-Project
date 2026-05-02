@@ -251,6 +251,7 @@ import subprocess, os, shutil
 
 # 1a. Fresh clone CountGD repository (always get latest)
 REPO_DIR = '/kaggle/working/CountGD'
+os.chdir('/kaggle/working')  # Reset CWD before deleting repo
 if os.path.exists(REPO_DIR):
     shutil.rmtree(REPO_DIR)
 subprocess.run(['git', 'clone', 'https://github.com/quocthangtrann/Countthings-Project.git',
