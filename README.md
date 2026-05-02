@@ -254,6 +254,7 @@ if not os.path.exists('/kaggle/working/CountGD'):
     subprocess.run(['git', 'clone', 'https://github.com/quocthangtrann/Countthings-Project.git',
                     '/kaggle/working/CountGD'], check=True)
 else:
+    subprocess.run(['git', '-C', '/kaggle/working/CountGD', 'reset', '--hard'], check=True)
     subprocess.run(['git', '-C', '/kaggle/working/CountGD', 'pull'], check=True)
 
 os.chdir('/kaggle/working/CountGD')
