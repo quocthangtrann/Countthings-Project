@@ -249,10 +249,12 @@ Create a new `.ipynb` file in Antigravity (VSCode). Add the following cells **in
 # ============================================================
 import subprocess, os
 
-# 1a. Clone CountGD repository
+# 1a. Clone CountGD repository (or pull latest if already cloned)
 if not os.path.exists('/kaggle/working/CountGD'):
     subprocess.run(['git', 'clone', 'https://github.com/quocthangtrann/Countthings-Project.git',
                     '/kaggle/working/CountGD'], check=True)
+else:
+    subprocess.run(['git', '-C', '/kaggle/working/CountGD', 'pull'], check=True)
 
 os.chdir('/kaggle/working/CountGD')
 
