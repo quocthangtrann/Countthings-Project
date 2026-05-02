@@ -46,8 +46,7 @@ from .bertwarper import (
     generate_masks_with_special_tokens_and_transfer_map,
 )
 from .transformer import build_transformer
-from .transformer_loca import TransformerEncoder
-from .positional_encoding_loca import PositionalEncodingsFixed
+
 from .utils import MLP, ContrastiveEmbed, sigmoid_focal_loss
 
 from .matcher import build_matcher
@@ -108,11 +107,7 @@ class GroundingDINO(nn.Module):
         self.feature_map_proj = nn.Conv2d(
             feature_map_in_channels, hidden_dim, kernel_size=1
         )
-        self.feature_map_encoder = TransformerEncoder(
-            3, hidden_dim, 8, 0.1, 1e-5,
-            8, True, nn.GELU, True
-        )
-        self.feature_map_pos_embed = PositionalEncodingsFixed(hidden_dim)
+
 
         # for dn training
         self.num_patterns = num_patterns
@@ -286,15 +281,7 @@ class GroundingDINO(nn.Module):
         
         x = self.feature_map_proj(x)
         
-        #pos_emb = self.feature_map_pos_embed(bs, h, w, x.device)
-        
-        #pos_emb = pos_emb.flatten(2).permute(2, 0, 1)
-        
-        #x = x.flatten(2).permute(2, 0, 1)
-        
-        #x = self.feature_map_encoder(x, pos_emb, src_key_padding_mask=None, src_mask=None)
-        
-        #x = x.permute(1, 2, 0).reshape(-1, self.hidden_dim, h, w)
+
         
         return x
 
