@@ -249,23 +249,25 @@ Create a new `.ipynb` file in Antigravity (VSCode). Add the following cells **in
 # ============================================================
 import subprocess, os
 
-# 1a. Clone CountGD repository (or pull latest if already cloned)
-if not os.path.exists('/kaggle/working/CountGD'):
+# 1a. Clone CountGD repository (or force-pull latest if already cloned)
+REPO_DIR = '/kaggle/working/CountGD'
+if not os.path.exists(REPO_DIR):
     subprocess.run(['git', 'clone', 'https://github.com/quocthangtrann/Countthings-Project.git',
-                    '/kaggle/working/CountGD'], check=True)
+                    REPO_DIR], check=True)
 else:
-    subprocess.run(['git', '-C', '/kaggle/working/CountGD', 'reset', '--hard'], check=True)
-    subprocess.run(['git', '-C', '/kaggle/working/CountGD', 'pull'], check=True)
+    # Discard any local patches from previous runs, then pull latest
+    subprocess.run(['git', '-C', REPO_DIR, 'reset', '--hard'], check=True)
+    subprocess.run(['git', '-C', REPO_DIR, 'pull'], check=True)
 
-os.chdir('/kaggle/working/CountGD')
+os.chdir(REPO_DIR)
 
 # 1b. Install Python dependencies
 subprocess.run(['pip', 'install', '-r', 'requirements.txt'], check=True)
 
 # 1c. Compile Multi-Scale Deformable Attention (C++/CUDA)
-os.chdir('/kaggle/working/CountGD/models/GroundingDINO/ops')
+os.chdir(f'{REPO_DIR}/models/GroundingDINO/ops')
 subprocess.run(['python', 'setup.py', 'build', 'install'], check=True)
-os.chdir('/kaggle/working/CountGD')
+os.chdir(REPO_DIR)
 
 # 1d. Download and cache BERT tokenizer locally
 subprocess.run(['python', 'download_bert.py'], check=True)
@@ -405,7 +407,7 @@ def convert_yolo_to_odvg(img_dir, lbl_dir, output_file):
         with Image.open(img_path) as img:
             img_w, img_h = img.size
 
-        # Collect all boxes grouped by class
+        # Collect all boxes with their class phrases
         regions = []
         all_boxes = []
         with open(lbl_path, 'r') as f:
@@ -472,18 +474,44 @@ convert_yolo_to_odvg(
 # ============================================================
 # CELL 4: Distributed Training (DDP on 2× T4 GPUs)
 # ============================================================
-import subprocess, os
+import subprocess, os, json
 
 os.chdir('/kaggle/working/CountGD')
 
-# Launch training as a background process with DDP
+# 4a. Ensure datasets_scaffold.json has all required fields
+config_path = 'config/datasets_scaffold.json'
+cfg = {
+    "train": [
+        {
+            "name": "scaffold_train",
+            "dataset_mode": "odvg",
+            "root": "/kaggle/working/mega_dataset/train/images",
+            "anno": "/kaggle/working/train_scaffold.jsonl",
+            "label_map": None
+        }
+    ],
+    "val": [
+        {
+            "name": "scaffold_val",
+            "dataset_mode": "odvg",
+            "root": "/kaggle/working/mega_dataset/valid/images",
+            "anno": "/kaggle/working/valid_scaffold.jsonl",
+            "label_map": None
+        }
+    ]
+}
+with open(config_path, 'w') as f:
+    json.dump(cfg, f, indent=4)
+print("✅ Dataset config verified.")
+
+# 4b. Launch training with DDP
 cmd = [
     'python', '-m', 'torch.distributed.launch',
     '--nproc_per_node=2',
     '--use_env',
     'main.py',
     '--config_file', 'config/cfg_scaffold_swint.py',
-    '--datasets', 'config/datasets_scaffold.json',
+    '--datasets', config_path,
     '--output_dir', '/kaggle/working/output',
     '--pretrain_model_path', 'groundingdino_swint_ogc.pth',
     '--find_unused_params',
@@ -524,12 +552,16 @@ else:
 # ============================================================
 # CELL 5: Single Image Inference
 # ============================================================
-import subprocess, os
+import subprocess, os, glob
 
 os.chdir('/kaggle/working/CountGD')
 
-# Path to a test image
-TEST_IMAGE = '/kaggle/working/mega_dataset/test/images/<your_test_image>.jpg'
+# Auto-select the first test image (or replace with a specific path)
+test_images = glob.glob('/kaggle/working/mega_dataset/test/images/*.jpg')
+if not test_images:
+    test_images = glob.glob('/kaggle/working/mega_dataset/valid/images/*.jpg')
+TEST_IMAGE = test_images[0]
+print(f"Testing with: {TEST_IMAGE}")
 
 cmd = [
     'python', 'single_image_inference.py',
