@@ -247,32 +247,35 @@ Create a new `.ipynb` file in Antigravity (VSCode). Add the following cells **in
 # ============================================================
 # CELL 1: Environment Setup
 # ============================================================
-import subprocess, os
+import subprocess, os, shutil
 
-# 1a. Clone CountGD repository (or force-pull latest if already cloned)
+# 1a. Fresh clone CountGD repository (always get latest)
 REPO_DIR = '/kaggle/working/CountGD'
-if not os.path.exists(REPO_DIR):
-    subprocess.run(['git', 'clone', 'https://github.com/quocthangtrann/Countthings-Project.git',
-                    REPO_DIR], check=True)
-else:
-    # Discard any local patches from previous runs, then pull latest
-    subprocess.run(['git', '-C', REPO_DIR, 'reset', '--hard'], check=True)
-    subprocess.run(['git', '-C', REPO_DIR, 'pull'], check=True)
+if os.path.exists(REPO_DIR):
+    shutil.rmtree(REPO_DIR)
+subprocess.run(['git', 'clone', 'https://github.com/quocthangtrann/Countthings-Project.git',
+                REPO_DIR], check=True)
 
 os.chdir(REPO_DIR)
 
-# 1b. Install Python dependencies
+# 1b. Verify critical fix is present (feature_map_encoder must be removed)
+with open('models/GroundingDINO/groundingdino.py', 'r') as f:
+    content = f.read()
+assert 'feature_map_encoder' not in content, "❌ ERROR: groundingdino.py still has unused modules. Push latest code first!"
+print("✅ Code verification passed.")
+
+# 1c. Install Python dependencies
 subprocess.run(['pip', 'install', '-r', 'requirements.txt'], check=True)
 
-# 1c. Compile Multi-Scale Deformable Attention (C++/CUDA)
+# 1d. Compile Multi-Scale Deformable Attention (C++/CUDA)
 os.chdir(f'{REPO_DIR}/models/GroundingDINO/ops')
 subprocess.run(['python', 'setup.py', 'build', 'install'], check=True)
 os.chdir(REPO_DIR)
 
-# 1d. Download and cache BERT tokenizer locally
+# 1e. Download and cache BERT tokenizer locally
 subprocess.run(['python', 'download_bert.py'], check=True)
 
-# 1e. Download pre-trained GroundingDINO Swin-T weights
+# 1f. Download pre-trained GroundingDINO Swin-T weights
 WEIGHTS_URL = "https://github.com/IDEA-Research/GroundingDINO/releases/download/v0.1.0-alpha/groundingdino_swint_ogc.pth"
 if not os.path.exists('groundingdino_swint_ogc.pth'):
     subprocess.run(['wget', '-q', WEIGHTS_URL], check=True)
